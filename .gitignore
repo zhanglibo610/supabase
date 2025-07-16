@@ -5,7 +5,6 @@ out
 .docz
 tmp
 *.swp
-.gradle
 
 coverage
 allure-results
