@@ -1,25 +1,26 @@
-import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useParams } from 'common'
 import dayjs from 'dayjs'
 import { ArrowRight, RefreshCw } from 'lucide-react'
-import { useParams } from 'common'
+import { useState } from 'react'
 
+import ReportChart from 'components/interfaces/Reports/ReportChart'
 import ReportHeader from 'components/interfaces/Reports/ReportHeader'
 import ReportPadding from 'components/interfaces/Reports/ReportPadding'
+import ReportStickyNav from 'components/interfaces/Reports/ReportStickyNav'
+import { LogsDatePicker } from 'components/interfaces/Settings/Logs/Logs.DatePickers'
 import DefaultLayout from 'components/layouts/DefaultLayout'
 import ReportsLayout from 'components/layouts/ReportsLayout/ReportsLayout'
 import { ButtonTooltip } from 'components/ui/ButtonTooltip'
-import { LogsDatePicker } from 'components/interfaces/Settings/Logs/Logs.DatePickers'
-import ReportChart from 'components/interfaces/Reports/ReportChart'
-import ReportStickyNav from 'components/interfaces/Reports/ReportStickyNav'
 
+import ReportFilterBar from 'components/interfaces/Reports/ReportFilterBar'
+import { REPORT_DATERANGE_HELPER_LABELS } from 'components/interfaces/Reports/Reports.constants'
+import { SharedAPIReport } from 'components/interfaces/Reports/SharedAPIReport/SharedAPIReport'
+import { useSharedAPIReport } from 'components/interfaces/Reports/SharedAPIReport/SharedAPIReport.constants'
+import UpgradePrompt from 'components/interfaces/Settings/Logs/UpgradePrompt'
 import { getAuthReportAttributes } from 'data/reports/auth-charts'
 import { useReportDateRange } from 'hooks/misc/useReportDateRange'
-import { REPORT_DATERANGE_HELPER_LABELS } from 'components/interfaces/Reports/Reports.constants'
-import UpgradePrompt from 'components/interfaces/Settings/Logs/UpgradePrompt'
-import { DatePickerValue } from 'components/interfaces/Settings/Logs/Logs.DatePickers'
 import type { NextPageWithLayout } from 'types'
-import { SharedAPIReport } from 'components/interfaces/Reports/SharedAPIReport'
 
 const AuthReport: NextPageWithLayout = () => {
   return (
@@ -46,18 +47,31 @@ const AuthUsage = () => {
     updateDateRange,
     datePickerValue,
     datePickerHelpers,
-    isOrgPlanLoading,
-    orgPlan,
     showUpgradePrompt,
     setShowUpgradePrompt,
     handleDatePickerChange,
   } = useReportDateRange(REPORT_DATERANGE_HELPER_LABELS.LAST_60_MINUTES)
 
+  const {
+    data,
+    error,
+    isLoading,
+    refetch,
+    isRefetching,
+    filters,
+    addFilter,
+    removeFilters,
+    isLoadingData,
+  } = useSharedAPIReport({
+    filterBy: 'auth',
+    start: selectedDateRange?.period_start?.date,
+    end: selectedDateRange?.period_end?.date,
+  })
+
   const queryClient = useQueryClient()
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  const isFreePlan = !isOrgPlanLoading && orgPlan?.id === 'free'
-  const AUTH_REPORT_ATTRIBUTES = getAuthReportAttributes(isFreePlan)
+  const AUTH_REPORT_ATTRIBUTES = getAuthReportAttributes()
 
   const onRefreshReport = async () => {
     if (!selectedDateRange) return
@@ -65,16 +79,10 @@ const AuthUsage = () => {
     setIsRefreshing(true)
     AUTH_REPORT_ATTRIBUTES.forEach((attr) => {
       attr.attributes.forEach((subAttr) => {
-        queryClient.invalidateQueries([
-          'auth-metrics',
-          ref,
-          subAttr.attribute,
-          selectedDateRange.period_start.date,
-          selectedDateRange.period_end.date,
-          selectedDateRange.interval,
-        ])
+        queryClient.invalidateQueries(['auth-logs-report', 'auth-metrics'])
       })
     })
+    refetch()
     setTimeout(() => setIsRefreshing(false), 1000)
   }
 
@@ -131,14 +139,28 @@ const AuthUsage = () => {
               startDate={selectedDateRange?.period_start?.date}
               endDate={selectedDateRange?.period_end?.date}
               updateDateRange={updateDateRange}
-              orgPlanId={orgPlan?.id}
+              isLoading={isRefreshing}
             />
           ))}
-        <div className="relative pt-8 mt-8 border-t">
+        <div>
+          <div className="mb-4">
+            <h5 className="text-foreground mb-2">Auth API Gateway</h5>
+            <ReportFilterBar
+              filters={filters}
+              onAddFilter={addFilter}
+              onRemoveFilters={removeFilters}
+              isLoading={isLoadingData || isRefetching}
+              hideDatepicker={true}
+              datepickerHelpers={datePickerHelpers}
+              selectedProduct={'auth'}
+              showDatabaseSelector={false}
+            />
+          </div>
           <SharedAPIReport
-            filterBy="auth"
-            start={selectedDateRange?.period_start?.date}
-            end={selectedDateRange?.period_end?.date}
+            data={data}
+            error={error}
+            isLoading={isLoading}
+            isRefetching={isRefetching}
           />
         </div>
       </ReportStickyNav>

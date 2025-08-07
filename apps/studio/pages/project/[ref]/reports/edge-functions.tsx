@@ -1,29 +1,26 @@
-import { useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useParams } from 'common'
 import dayjs from 'dayjs'
 import { ArrowRight, ChevronDown, RefreshCw } from 'lucide-react'
-import { useParams } from 'common'
+import { useEffect, useState } from 'react'
 
+import { Label } from '@ui/components/shadcn/ui/label'
+import ReportChart from 'components/interfaces/Reports/ReportChart'
 import ReportHeader from 'components/interfaces/Reports/ReportHeader'
 import ReportPadding from 'components/interfaces/Reports/ReportPadding'
+import ReportStickyNav from 'components/interfaces/Reports/ReportStickyNav'
+import { LogsDatePicker } from 'components/interfaces/Settings/Logs/Logs.DatePickers'
 import DefaultLayout from 'components/layouts/DefaultLayout'
 import ReportsLayout from 'components/layouts/ReportsLayout/ReportsLayout'
-import ReportChart from 'components/interfaces/Reports/ReportChart'
-import ReportStickyNav from 'components/interfaces/Reports/ReportStickyNav'
 import { ButtonTooltip } from 'components/ui/ButtonTooltip'
-import {
-  LogsDatePicker,
-  DatePickerValue,
-} from 'components/interfaces/Settings/Logs/Logs.DatePickers'
 import { Button, Checkbox, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from 'ui'
-import { Label } from '@ui/components/shadcn/ui/label'
 
-import { getEdgeFunctionReportAttributes } from 'data/reports/edgefn-charts'
 import { useEdgeFunctionsQuery } from 'data/edge-functions/edge-functions-query'
+import { getEdgeFunctionReportAttributes } from 'data/reports/edgefn-charts'
 
-import { useReportDateRange } from 'hooks/misc/useReportDateRange'
 import { REPORT_DATERANGE_HELPER_LABELS } from 'components/interfaces/Reports/Reports.constants'
 import UpgradePrompt from 'components/interfaces/Settings/Logs/UpgradePrompt'
+import { useReportDateRange } from 'hooks/misc/useReportDateRange'
 
 import type { NextPageWithLayout } from 'types'
 
@@ -94,16 +91,16 @@ const EdgeFunctionsUsage = () => {
       <ReportHeader title="Edge Functions" showDatabaseSelector={false} />
       <ReportStickyNav
         content={
-          <>
-            <ButtonTooltip
-              type="default"
-              disabled={isRefreshing}
-              icon={<RefreshCw className={isRefreshing ? 'animate-spin' : ''} />}
-              className="w-7"
-              tooltip={{ content: { side: 'bottom', text: 'Refresh report' } }}
-              onClick={onRefreshReport}
-            />
+          <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
+              <ButtonTooltip
+                type="default"
+                disabled={isRefreshing}
+                icon={<RefreshCw className={isRefreshing ? 'animate-spin' : ''} />}
+                className="w-7"
+                tooltip={{ content: { side: 'bottom', text: 'Refresh report' } }}
+                onClick={onRefreshReport}
+              />
               <LogsDatePicker
                 onSubmit={handleDatePickerChange}
                 value={datePickerValue}
@@ -116,16 +113,29 @@ const EdgeFunctionsUsage = () => {
                 description="Report data can be stored for a maximum of 3 months depending on the plan that your project is on."
                 source="edgeFunctionsReportDateRange"
               />
+              {selectedDateRange && (
+                <div className="flex items-center gap-x-2 text-xs">
+                  <p className="text-foreground-light">
+                    {dayjs(selectedDateRange.period_start.date).format('MMM D, h:mma')}
+                  </p>
+                  <p className="text-foreground-light">
+                    <ArrowRight size={12} />
+                  </p>
+                  <p className="text-foreground-light">
+                    {dayjs(selectedDateRange.period_end.date).format('MMM D, h:mma')}
+                  </p>
+                </div>
+              )}
+            </div>
+            <div>
               <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
                 <DropdownMenuTrigger asChild>
                   <Button type="default" iconRight={<ChevronDown />}>
-                    <span>
-                      {functionIds.length === 0
-                        ? 'All Functions'
-                        : `${functionIds.length} function${
-                            functionIds.length > 1 ? 's' : ''
-                          } selected`}
-                    </span>
+                    {functionIds.length === 0
+                      ? 'All Functions'
+                      : `${functionIds.length} function${
+                          functionIds.length > 1 ? 's' : ''
+                        } selected`}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="bottom" align="start" className="w-72 p-0">
@@ -198,36 +208,24 @@ const EdgeFunctionsUsage = () => {
                   </div>
                 </DropdownMenuContent>
               </DropdownMenu>
-              {selectedDateRange && (
-                <div className="flex items-center gap-x-2 text-xs">
-                  <p className="text-foreground-light">
-                    {dayjs(selectedDateRange.period_start.date).format('MMM D, h:mma')}
-                  </p>
-                  <p className="text-foreground-light">
-                    <ArrowRight size={12} />
-                  </p>
-                  <p className="text-foreground-light">
-                    {dayjs(selectedDateRange.period_end.date).format('MMM D, h:mma')}
-                  </p>
-                </div>
-              )}
             </div>
-          </>
+          </div>
         }
       >
-        {selectedDateRange &&
-          EDGEFN_CHARTS.filter((attr) => !attr.hide).map((attr, i) => (
-            <ReportChart
-              key={`${attr.id}-${i}`}
-              chart={attr}
-              interval={selectedDateRange.interval}
-              startDate={selectedDateRange?.period_start?.date}
-              endDate={selectedDateRange?.period_end?.date}
-              updateDateRange={updateDateRange}
-              functionIds={functionIds}
-              orgPlanId={orgPlan?.id}
-            />
-          ))}
+        <div className="mt-8 flex flex-col gap-4">
+          {selectedDateRange &&
+            EDGEFN_CHARTS.filter((attr) => !attr.hide).map((attr, i) => (
+              <ReportChart
+                key={`${attr.id}-${i}`}
+                chart={attr}
+                interval={selectedDateRange.interval}
+                startDate={selectedDateRange?.period_start?.date}
+                endDate={selectedDateRange?.period_end?.date}
+                updateDateRange={updateDateRange}
+                functionIds={functionIds}
+              />
+            ))}
+        </div>
       </ReportStickyNav>
     </>
   )

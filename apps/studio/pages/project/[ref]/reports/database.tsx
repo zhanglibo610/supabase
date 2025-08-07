@@ -1,48 +1,46 @@
-import { useEffect, useState } from 'react'
 import { PermissionAction } from '@supabase/shared-types/out/constants'
 import { useQueryClient } from '@tanstack/react-query'
+import { useParams } from 'common'
 import dayjs from 'dayjs'
 import { ArrowRight, ExternalLink, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { AlertDescription_Shadcn_, Alert_Shadcn_, Button } from 'ui'
-import { useParams } from 'common'
 
+import ReportChart from 'components/interfaces/Reports/ReportChart'
 import ReportHeader from 'components/interfaces/Reports/ReportHeader'
 import ReportPadding from 'components/interfaces/Reports/ReportPadding'
+import ReportStickyNav from 'components/interfaces/Reports/ReportStickyNav'
 import ReportWidget from 'components/interfaces/Reports/ReportWidget'
 import DiskSizeConfigurationModal from 'components/interfaces/Settings/Database/DiskSizeConfigurationModal'
+import { LogsDatePicker } from 'components/interfaces/Settings/Logs/Logs.DatePickers'
+import UpgradePrompt from 'components/interfaces/Settings/Logs/UpgradePrompt'
 import DefaultLayout from 'components/layouts/DefaultLayout'
-import { useProjectContext } from 'components/layouts/ProjectLayout/ProjectContext'
 import ReportsLayout from 'components/layouts/ReportsLayout/ReportsLayout'
 import Table from 'components/to-be-cleaned/Table'
 import { ButtonTooltip } from 'components/ui/ButtonTooltip'
 import ChartHandler from 'components/ui/Charts/ChartHandler'
+import ComposedChartHandler from 'components/ui/Charts/ComposedChartHandler'
+import GrafanaPromoBanner from 'components/ui/GrafanaPromoBanner'
 import Panel from 'components/ui/Panel'
 import { useDatabaseSelectorStateSnapshot } from 'state/database-selector'
-import ComposedChartHandler from 'components/ui/Charts/ComposedChartHandler'
-import {
-  LogsDatePicker,
-  DatePickerValue,
-} from 'components/interfaces/Settings/Logs/Logs.DatePickers'
-import ReportStickyNav from 'components/interfaces/Reports/ReportStickyNav'
-import GrafanaPromoBanner from 'components/ui/GrafanaPromoBanner'
 
-import { analyticsKeys } from 'data/analytics/keys'
-import { getReportAttributes, getReportAttributesV2 } from 'data/reports/database-charts'
-import { useDatabaseSizeQuery } from 'data/database/database-size-query'
-import { useDatabaseReport } from 'data/reports/database-report-query'
-import { useProjectDiskResizeMutation } from 'data/config/project-disk-resize-mutation'
-import { useCheckPermissions } from 'hooks/misc/useCheckPermissions'
-import { useFlag } from 'hooks/ui/useFlag'
-import { useSelectedOrganization } from 'hooks/misc/useSelectedOrganization'
-import { useReportDateRange } from 'hooks/misc/useReportDateRange'
 import { REPORT_DATERANGE_HELPER_LABELS } from 'components/interfaces/Reports/Reports.constants'
+import { analyticsKeys } from 'data/analytics/keys'
+import { useProjectDiskResizeMutation } from 'data/config/project-disk-resize-mutation'
+import { useDatabaseSizeQuery } from 'data/database/database-size-query'
+import { getReportAttributes, getReportAttributesV2 } from 'data/reports/database-charts'
+import { useDatabaseReport } from 'data/reports/database-report-query'
+import { useCheckPermissions } from 'hooks/misc/useCheckPermissions'
+import { useReportDateRange } from 'hooks/misc/useReportDateRange'
+import { useSelectedOrganizationQuery } from 'hooks/misc/useSelectedOrganization'
+import { useFlag } from 'hooks/ui/useFlag'
 import { formatBytes } from 'lib/helpers'
-import UpgradePrompt from 'components/interfaces/Settings/Logs/UpgradePrompt'
 
-import type { NextPageWithLayout } from 'types'
 import type { MultiAttribute } from 'components/ui/Charts/ComposedChart.utils'
+import { useSelectedProjectQuery } from 'hooks/misc/useSelectedProject'
+import type { NextPageWithLayout } from 'types'
 
 const DatabaseReport: NextPageWithLayout = () => {
   return (
@@ -63,9 +61,9 @@ export default DatabaseReport
 
 const DatabaseUsage = () => {
   const { db, chart, ref } = useParams()
-  const { project } = useProjectContext()
   const isReportsV2 = useFlag('reportsDatabaseV2')
-  const org = useSelectedOrganization()
+  const { data: project } = useSelectedProjectQuery()
+  const { data: org } = useSelectedOrganizationQuery()
 
   const {
     selectedDateRange,
@@ -79,7 +77,6 @@ const DatabaseUsage = () => {
     handleDatePickerChange,
   } = useReportDateRange(REPORT_DATERANGE_HELPER_LABELS.LAST_60_MINUTES)
 
-  const isFreePlan = !isOrgPlanLoading && orgPlan?.id === 'free'
   const isTeamsOrEnterprisePlan =
     !isOrgPlanLoading && (orgPlan?.id === 'team' || orgPlan?.id === 'enterprise')
   const showChartsV2 = isReportsV2 || isTeamsOrEnterprisePlan
@@ -108,7 +105,7 @@ const DatabaseUsage = () => {
     },
   })
 
-  const REPORT_ATTRIBUTES = getReportAttributes(isFreePlan)
+  const REPORT_ATTRIBUTES = getReportAttributes(org!, project!)
   const REPORT_ATTRIBUTES_V2 = getReportAttributesV2(org!, project!)
 
   const { isLoading: isUpdatingDiskSize } = useProjectDiskResizeMutation({
@@ -139,6 +136,20 @@ const DatabaseUsage = () => {
     })
     if (showChartsV2) {
       REPORT_ATTRIBUTES_V2.forEach((chart: any) => {
+        chart.attributes.forEach((attr: any) => {
+          queryClient.invalidateQueries(
+            analyticsKeys.infraMonitoring(ref, {
+              attribute: attr.attribute,
+              startDate: period_start.date,
+              endDate: period_end.date,
+              interval,
+              databaseIdentifier: state.selectedDatabaseId,
+            })
+          )
+        })
+      })
+    } else {
+      REPORT_ATTRIBUTES.forEach((chart: any) => {
         chart.attributes.forEach((attr: any) => {
           queryClient.invalidateQueries(
             analyticsKeys.infraMonitoring(ref, {
@@ -229,44 +240,57 @@ const DatabaseUsage = () => {
           </>
         }
       >
-        {showChartsV2 ? (
-          selectedDateRange &&
-          REPORT_ATTRIBUTES_V2.filter((chart) => !chart.hide).map((chart) => (
-            <ComposedChartHandler
-              key={chart.id}
-              {...chart}
-              attributes={chart.attributes as MultiAttribute[]}
-              interval={selectedDateRange.interval}
-              startDate={selectedDateRange?.period_start?.date}
-              endDate={selectedDateRange?.period_end?.date}
-              updateDateRange={updateDateRange}
-              defaultChartStyle={chart.defaultChartStyle as 'line' | 'bar' | 'stackedAreaLine'}
-              showMaxValue={
-                chart.id === 'client-connections' || chart.id === 'pgbouncer-connections'
-                  ? true
-                  : chart.showMaxValue
-              }
-            />
-          ))
-        ) : (
-          <Panel title={<h2>Database health</h2>}>
-            <Panel.Content className="grid grid-cols-1 gap-4">
-              {selectedDateRange &&
-                REPORT_ATTRIBUTES.filter((attr) => !attr.hide).map((attr) => (
-                  <ChartHandler
-                    key={attr.id}
-                    {...attr}
-                    provider="infra-monitoring"
-                    attribute={attr.id}
-                    label={attr.label}
+        {selectedDateRange &&
+          orgPlan?.id &&
+          (showChartsV2
+            ? REPORT_ATTRIBUTES_V2.filter((chart) => !chart.hide).map((chart) => (
+                <ComposedChartHandler
+                  key={chart.id}
+                  {...chart}
+                  attributes={chart.attributes as MultiAttribute[]}
+                  interval={selectedDateRange.interval}
+                  startDate={selectedDateRange?.period_start?.date}
+                  endDate={selectedDateRange?.period_end?.date}
+                  updateDateRange={updateDateRange}
+                  defaultChartStyle={chart.defaultChartStyle as 'line' | 'bar' | 'stackedAreaLine'}
+                  showMaxValue={
+                    chart.id === 'client-connections' || chart.id === 'pgbouncer-connections'
+                      ? true
+                      : chart.showMaxValue
+                  }
+                />
+              ))
+            : REPORT_ATTRIBUTES.filter((chart) => !chart.hide).map((chart, i) =>
+                chart.availableIn?.includes(orgPlan?.id) ? (
+                  <ComposedChartHandler
+                    key={chart.id}
+                    {...chart}
+                    attributes={chart.attributes as MultiAttribute[]}
                     interval={selectedDateRange.interval}
                     startDate={selectedDateRange?.period_start?.date}
                     endDate={selectedDateRange?.period_end?.date}
+                    updateDateRange={updateDateRange}
+                    defaultChartStyle={
+                      chart.defaultChartStyle as 'line' | 'bar' | 'stackedAreaLine'
+                    }
+                    showMaxValue={
+                      chart.id === 'client-connections' || chart.id === 'pgbouncer-connections'
+                        ? true
+                        : chart.showMaxValue
+                    }
                   />
-                ))}
-            </Panel.Content>
-          </Panel>
-        )}
+                ) : (
+                  <ReportChart
+                    key={`${chart.id}-${i}`}
+                    chart={chart}
+                    className="!mb-0"
+                    interval={selectedDateRange.interval}
+                    startDate={selectedDateRange?.period_start?.date}
+                    endDate={selectedDateRange?.period_end?.date}
+                    updateDateRange={updateDateRange}
+                  />
+                )
+              ))}
         {selectedDateRange && isReplicaSelected && (
           <Panel title="Replica Information">
             <Panel.Content>
@@ -297,11 +321,11 @@ const DatabaseUsage = () => {
               <div>
                 <div className="col-span-4 inline-grid grid-cols-12 gap-12 w-full mt-5">
                   <div className="grid gap-2 col-span-4 xl:col-span-2">
-                    <h5 className="text-sm">Space used</h5>
+                    <h5>Space used</h5>
                     <span className="text-lg">{formatBytes(databaseSizeBytes, 2, 'GB')}</span>
                   </div>
                   <div className="grid gap-2 col-span-4 xl:col-span-3">
-                    <h5 className="text-sm">Provisioned disk size</h5>
+                    <h5>Provisioned disk size</h5>
                     <span className="text-lg">{currentDiskSize} GB</span>
                   </div>
 

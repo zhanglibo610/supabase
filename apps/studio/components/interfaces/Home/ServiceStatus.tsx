@@ -12,7 +12,7 @@ import {
   useProjectServiceStatusQuery,
 } from 'data/service-status/service-status-query'
 import { useIsFeatureEnabled } from 'hooks/misc/useIsFeatureEnabled'
-import { useSelectedProject } from 'hooks/misc/useSelectedProject'
+import { useSelectedProjectQuery } from 'hooks/misc/useSelectedProject'
 import {
   Button,
   InfoIcon,
@@ -74,7 +74,7 @@ const StatusIcon = ({
 
 export const ServiceStatus = () => {
   const { ref } = useParams()
-  const project = useSelectedProject()
+  const { data: project } = useSelectedProjectQuery()
   const [open, setOpen] = useState(false)
 
   const {
@@ -239,7 +239,7 @@ export const ServiceStatus = () => {
                   currentBranch?.status === 'MIGRATIONS_FAILED'
                 ? 'UNHEALTHY'
                 : 'COMING_UP') as ProjectServiceStatus,
-            logsUrl: '/logs/edge-functions-logs',
+            logsUrl: '/branches',
           },
         ]
       : []),
