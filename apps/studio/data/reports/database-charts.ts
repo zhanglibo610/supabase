@@ -2,7 +2,7 @@ import { numberFormatter } from 'components/ui/Charts/Charts.utils'
 import { ReportAttributes } from 'components/ui/Charts/ComposedChart.utils'
 import { DOCS_URL } from 'lib/constants'
 import { formatBytes } from 'lib/helpers'
-import { Organization } from 'types'
+import type { Organization } from 'types'
 import { DiskAttributesData } from '../config/disk-attributes-query'
 import { MaxConnectionsData } from '../database/max-connections-query'
 import { Project } from '../projects/project-detail-query'
@@ -221,7 +221,7 @@ export const getReportAttributesV2: (
       docsUrl: `${DOCS_URL}/guides/telemetry/reports#database-connections`,
       attributes: [
         {
-          attribute: 'total_db_connections',
+          attribute: 'pg_stat_database_num_backends',
           provider: 'infra-monitoring',
           label: 'Total connections',
           tooltip: 'Total number of active database connections',
