@@ -712,12 +712,6 @@ export const auth: NavMenuConstant = {
           name: 'Server-Side Rendering',
           url: '/guides/auth/server-side',
           items: [
-            { name: 'Overview', url: '/guides/auth/server-side' },
-            { name: 'Next.js guide', url: '/guides/auth/server-side/nextjs' },
-            {
-              name: 'SvelteKit guide',
-              url: '/guides/auth/server-side/sveltekit' as `/${string}`,
-            },
             { name: 'Creating a client', url: '/guides/auth/server-side/creating-a-client' },
             {
               name: 'Migrating from Auth Helpers',
@@ -1310,6 +1304,10 @@ export const database: NavMenuConstant = {
           url: '/guides/database/extensions/wrappers/s3' as `/${string}`,
         },
         {
+          name: 'Connecting to AWS S3 Vectors',
+          url: '/guides/database/extensions/wrappers/s3_vectors' as `/${string}`,
+        },
+        {
           name: 'Connecting to BigQuery',
           url: '/guides/database/extensions/wrappers/bigquery' as `/${string}`,
         },
@@ -1419,6 +1417,10 @@ export const queues: NavMenuConstant = {
         {
           name: 'Consuming Messages with Edge Functions',
           url: '/guides/queues/consuming-messages-with-edge-functions',
+        },
+        {
+          name: 'Expose Queues for local and self-hosted Supabase',
+          url: '/guides/queues/expose-self-hosted-queues',
         },
       ],
     },
