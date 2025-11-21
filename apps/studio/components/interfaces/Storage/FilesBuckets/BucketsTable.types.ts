@@ -3,4 +3,3 @@ export type BucketsTablePaginationProps = {
   isLoadingMore?: boolean
   onLoadMore?: () => void
 }
-
