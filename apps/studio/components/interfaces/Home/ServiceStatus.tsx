@@ -13,6 +13,7 @@ import {
 } from 'data/service-status/service-status-query'
 import { useIsFeatureEnabled } from 'hooks/misc/useIsFeatureEnabled'
 import { useSelectedProjectQuery } from 'hooks/misc/useSelectedProject'
+import { DOCS_URL } from 'lib/constants'
 import {
   Button,
   InfoIcon,
@@ -122,7 +123,9 @@ export const ServiceStatus = () => {
       projectRef: ref,
     },
     {
-      refetchInterval: (data) => (data?.some((service) => !service.healthy) ? 5000 : false),
+      refetchInterval: (data) => {
+        return data?.some((service) => !service.healthy) ? 5000 : false
+      },
     }
   )
   const { data: edgeFunctionsStatus, refetch: refetchEdgeFunctionServiceStatus } =
@@ -131,7 +134,9 @@ export const ServiceStatus = () => {
         projectRef: ref,
       },
       {
-        refetchInterval: (data) => (!data?.healthy ? 5000 : false),
+        refetchInterval: (data) => {
+          return !data?.healthy ? 5000 : false
+        },
       }
     )
 
@@ -213,7 +218,7 @@ export const ServiceStatus = () => {
           {
             name: 'Edge Functions',
             error: undefined,
-            docsUrl: 'https://supabase.com/docs/guides/functions/troubleshooting',
+            docsUrl: `${DOCS_URL}/guides/functions/troubleshooting`,
             isLoading,
             isHealthy: !!edgeFunctionsStatus?.healthy,
             status: edgeFunctionsStatus?.healthy

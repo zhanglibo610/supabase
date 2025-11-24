@@ -11,6 +11,7 @@ import { useCustomDomainDeleteMutation } from 'data/custom-domains/custom-domain
 import { useCustomDomainsQuery } from 'data/custom-domains/custom-domains-query'
 import { useCustomDomainReverifyMutation } from 'data/custom-domains/custom-domains-reverify-mutation'
 import { useInterval } from 'hooks/misc/useInterval'
+import { DOCS_URL } from 'lib/constants'
 import {
   AlertDescription_Shadcn_,
   AlertTitle_Shadcn_,
@@ -32,14 +33,14 @@ const CustomDomainVerify = () => {
   const isSSLCertificateDeploying =
     customDomain?.ssl.status !== undefined && customDomain.ssl.txt_name === undefined
 
-  const { mutate: reverifyCustomDomain, isLoading: isReverifyLoading } =
+  const { mutate: reverifyCustomDomain, isPending: isReverifyLoading } =
     useCustomDomainReverifyMutation({
       onSuccess: (res) => {
         if (res.status === '2_initiated') setIsNotVerifiedYet(true)
       },
     })
 
-  const { mutate: deleteCustomDomain, isLoading: isDeleting } = useCustomDomainDeleteMutation({
+  const { mutate: deleteCustomDomain, isPending: isDeleting } = useCustomDomainDeleteMutation({
     onSuccess: () => {
       toast.success(
         'Custom domain setup cancelled successfully. It may take a few seconds before your custom domain is fully removed, so you may need to refresh your browser.'
@@ -110,7 +111,7 @@ const CustomDomainVerify = () => {
                       <Link
                         target="_blank"
                         rel="noreferrer"
-                        href={`https://whatsmydns.net/#TXT/${customDomain?.hostname}`}
+                        href={`https://whatsmydns.net/#TXT/${customDomain?.ssl.txt_name}`}
                         className="text-brand"
                       >
                         here
@@ -191,7 +192,7 @@ const CustomDomainVerify = () => {
 
       <Panel.Content>
         <div className="flex items-center justify-between">
-          <DocsButton href="https://supabase.com/docs/guides/platform/custom-domains" />
+          <DocsButton href={`${DOCS_URL}/guides/platform/custom-domains`} />
           <div className="flex items-center space-x-2">
             <Button
               type="default"

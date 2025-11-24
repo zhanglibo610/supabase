@@ -2,22 +2,22 @@ import { PermissionAction } from '@supabase/shared-types/out/constants'
 import saveAs from 'file-saver'
 import { ArrowUp, ChevronDown, FileText, Trash } from 'lucide-react'
 import Link from 'next/link'
-import Papa from 'papaparse'
 import { ReactNode, useState } from 'react'
 import { toast } from 'sonner'
 
 import { useParams } from 'common'
 import { useTableFilter } from 'components/grid/hooks/useTableFilter'
 import { useTableSort } from 'components/grid/hooks/useTableSort'
-import GridHeaderActions from 'components/interfaces/TableGridEditor/GridHeaderActions'
+import { GridHeaderActions } from 'components/interfaces/TableGridEditor/GridHeaderActions'
 import { formatTableRowsToSQL } from 'components/interfaces/TableGridEditor/TableEntity.utils'
 import { ButtonTooltip } from 'components/ui/ButtonTooltip'
 import { useTableRowsCountQuery } from 'data/table-rows/table-rows-count-query'
 import { fetchAllTableRows, useTableRowsQuery } from 'data/table-rows/table-rows-query'
 import { useSendEventMutation } from 'data/telemetry/send-event-mutation'
-import { useCheckPermissions } from 'hooks/misc/useCheckPermissions'
+import { useAsyncCheckPermissions } from 'hooks/misc/useCheckPermissions'
 import { useSelectedOrganizationQuery } from 'hooks/misc/useSelectedOrganization'
 import { useSelectedProjectQuery } from 'hooks/misc/useSelectedProject'
+import { DOCS_URL } from 'lib/constants'
 import { RoleImpersonationState } from 'lib/role-impersonation'
 import {
   useRoleImpersonationStateSnapshot,
@@ -28,6 +28,7 @@ import { useTableEditorTableStateSnapshot } from 'state/table-editor-table'
 import {
   Button,
   cn,
+  copyToClipboard,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -37,6 +38,7 @@ import {
 } from 'ui'
 import { ExportDialog } from './ExportDialog'
 import { FilterPopover } from './filter/FilterPopover'
+import { formatRowsForCSV } from './Header.utils'
 import { SortPopover } from './sort/SortPopover'
 // [Joshen] CSV exports require this guard as a fail-safe if the table is
 // just too large for a browser to keep all the rows in memory before
@@ -44,9 +46,10 @@ import { SortPopover } from './sort/SortPopover'
 export const MAX_EXPORT_ROW_COUNT = 500000
 export const MAX_EXPORT_ROW_COUNT_MESSAGE = (
   <>
-    Sorry! We're unable to support exporting row counts larger than $
-    {MAX_EXPORT_ROW_COUNT.toLocaleString()} at the moment. Alternatively, you may consider using
-    <Link href="https://supabase.com/docs/reference/cli/supabase-db-dump" target="_blank">
+    Sorry! We're unable to support exporting row counts larger than{' '}
+    {MAX_EXPORT_ROW_COUNT.toLocaleString('en-US')} at the moment. Alternatively, you may consider
+    using{' '}
+    <Link href={`${DOCS_URL}/reference/cli/supabase-db-dump`} target="_blank">
       pg_dump
     </Link>{' '}
     via our CLI instead.
@@ -55,9 +58,11 @@ export const MAX_EXPORT_ROW_COUNT_MESSAGE = (
 
 export type HeaderProps = {
   customHeader: ReactNode
+  isRefetching: boolean
+  tableQueriesEnabled?: boolean
 }
 
-const Header = ({ customHeader }: HeaderProps) => {
+export const Header = ({ customHeader, isRefetching, tableQueriesEnabled = true }: HeaderProps) => {
   const snap = useTableEditorTableStateSnapshot()
 
   return (
@@ -66,17 +71,15 @@ const Header = ({ customHeader }: HeaderProps) => {
         {customHeader ? (
           customHeader
         ) : snap.selectedRows.size > 0 ? (
-          <RowHeader />
+          <RowHeader tableQueriesEnabled={tableQueriesEnabled} />
         ) : (
           <DefaultHeader />
         )}
-        <GridHeaderActions table={snap.originalTable} />
+        <GridHeaderActions table={snap.originalTable} isRefetching={isRefetching} />
       </div>
     </div>
   )
 }
-
-export default Header
 
 const DefaultHeader = () => {
   const { ref: projectRef } = useParams()
@@ -84,8 +87,10 @@ const DefaultHeader = () => {
 
   const snap = useTableEditorTableStateSnapshot()
   const tableEditorSnap = useTableEditorStateSnapshot()
-  const canCreateColumns = useCheckPermissions(PermissionAction.TENANT_SQL_ADMIN_WRITE, 'columns')
-
+  const { can: canCreateColumns } = useAsyncCheckPermissions(
+    PermissionAction.TENANT_SQL_ADMIN_WRITE,
+    'columns'
+  )
   const { mutate: sendEvent } = useSendEventMutation()
 
   const onAddRow =
@@ -221,7 +226,12 @@ const DefaultHeader = () => {
   )
 }
 
-const RowHeader = () => {
+type RowHeaderProps = {
+  tableQueriesEnabled?: boolean
+}
+
+const RowHeader = ({ tableQueriesEnabled = true }: RowHeaderProps) => {
+  debugger
   const { data: project } = useSelectedProjectQuery()
   const tableEditorSnap = useTableEditorStateSnapshot()
   const snap = useTableEditorTableStateSnapshot()
@@ -235,16 +245,19 @@ const RowHeader = () => {
   const [isExporting, setIsExporting] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
 
-  const { data } = useTableRowsQuery({
-    projectRef: project?.ref,
-    connectionString: project?.connectionString,
-    tableId: snap.table.id,
-    sorts,
-    filters,
-    page: snap.page,
-    limit: tableEditorSnap.rowsPerPage,
-    roleImpersonationState: roleImpersonationState as RoleImpersonationState,
-  })
+  const { data } = useTableRowsQuery(
+    {
+      projectRef: project?.ref,
+      connectionString: project?.connectionString,
+      tableId: snap.table.id,
+      sorts,
+      filters,
+      page: snap.page,
+      limit: tableEditorSnap.rowsPerPage,
+      roleImpersonationState: roleImpersonationState as RoleImpersonationState,
+    },
+    { enabled: tableQueriesEnabled }
+  )
 
   const { data: countData } = useTableRowsCountQuery(
     {
@@ -255,7 +268,7 @@ const RowHeader = () => {
       enforceExactCount: snap.enforceExactCount,
       roleImpersonationState: roleImpersonationState as RoleImpersonationState,
     },
-    { keepPreviousData: true }
+    { keepPreviousData: true, enabled: tableQueriesEnabled }
   )
 
   const allRows = data?.rows ?? []
@@ -277,6 +290,25 @@ const RowHeader = () => {
         snap.setSelectedRows(new Set())
       },
     })
+  }
+
+  const onCopyRows = (type: 'csv' | 'json' | 'sql') => {
+    const rows = allRows.filter((x) => snap.selectedRows.has(x.idx))
+
+    if (type === 'csv') {
+      const csv = formatRowsForCSV({
+        rows,
+        columns: snap.table!.columns.map((column) => column.name),
+      })
+      copyToClipboard(csv)
+    } else if (type === 'sql') {
+      const sqlStatements = formatTableRowsToSQL(snap.table, rows)
+      copyToClipboard(sqlStatements)
+    } else if (type === 'json') {
+      copyToClipboard(JSON.stringify(rows))
+    }
+
+    toast.success('Copied rows to clipboard')
   }
 
   const onRowsExportCSV = async () => {
@@ -338,16 +370,8 @@ const RowHeader = () => {
       return
     }
 
-    const formattedRows = rows.map((row) => {
-      const formattedRow = row
-      Object.keys(row).map((column) => {
-        if (typeof row[column] === 'object' && row[column] !== null)
-          formattedRow[column] = JSON.stringify(formattedRow[column])
-      })
-      return formattedRow
-    })
-
-    const csv = Papa.unparse(formattedRows, {
+    const csv = formatRowsForCSV({
+      rows,
       columns: snap.table!.columns.map((column) => column.name),
     })
     const csvData = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -492,6 +516,42 @@ const RowHeader = () => {
                 : `Delete ${snap.selectedRows.size} row`}
           </ButtonTooltip>
         )}
+
+        {!snap.allRowsSelected ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="default"
+                size="tiny"
+                iconRight={<ChevronDown />}
+                loading={isExporting}
+                disabled={isExporting}
+              >
+                Copy
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-40">
+              <DropdownMenuItem onClick={() => onCopyRows('csv')}>Copy as CSV</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onCopyRows('sql')}>Copy as SQL</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onCopyRows('json')}>Copy as JSON</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <ButtonTooltip
+            disabled
+            type="default"
+            tooltip={{
+              content: {
+                side: 'bottom',
+                className: 'w-64 text-center',
+                text: 'Copy to clipboard is not supported while all rows in the table are selected',
+              },
+            }}
+          >
+            Copy
+          </ButtonTooltip>
+        )}
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button

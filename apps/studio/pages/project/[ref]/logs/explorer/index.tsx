@@ -3,7 +3,7 @@ import { useLocalStorage } from '@uidotdev/usehooks'
 import dayjs from 'dayjs'
 import { editor } from 'monaco-editor'
 import { useRouter } from 'next/router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { IS_PLATFORM, LOCAL_STORAGE_KEYS, useParams } from 'common'
@@ -18,7 +18,7 @@ import {
   LogsWarning,
 } from 'components/interfaces/Settings/Logs/Logs.types'
 import {
-  maybeShowUpgradePrompt,
+  maybeShowUpgradePromptIfNotEntitled,
   useEditorHints,
 } from 'components/interfaces/Settings/Logs/Logs.utils'
 import LogsQueryPanel from 'components/interfaces/Settings/Logs/LogsQueryPanel'
@@ -36,6 +36,8 @@ import {
 } from 'data/content/content-upsert-mutation'
 import useLogsQuery from 'hooks/analytics/useLogsQuery'
 import { useLogsUrlState } from 'hooks/analytics/useLogsUrlState'
+import { useCustomContent } from 'hooks/custom-content/useCustomContent'
+import { useIsFeatureEnabled } from 'hooks/misc/useIsFeatureEnabled'
 import { useSelectedOrganizationQuery } from 'hooks/misc/useSelectedOrganization'
 import { useUpgradePrompt } from 'hooks/misc/useUpgradePrompt'
 import { uuidv4 } from 'lib/helpers'
@@ -50,14 +52,13 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from 'ui'
+import { useCheckEntitlements } from 'hooks/misc/useCheckEntitlements'
 
 const LOCAL_PLACEHOLDER_QUERY =
   'select\n  timestamp, event_message, metadata\n  from edge_logs limit 5'
 
 const PLATFORM_PLACEHOLDER_QUERY =
   'select\n  cast(timestamp as datetime) as timestamp,\n  event_message, metadata \nfrom edge_logs \nlimit 5'
-
-const PLACEHOLDER_QUERY = IS_PLATFORM ? PLATFORM_PLACEHOLDER_QUERY : LOCAL_PLACEHOLDER_QUERY
 
 export const LogsExplorerPage: NextPageWithLayout = () => {
   useEditorHints()
@@ -66,11 +67,21 @@ export const LogsExplorerPage: NextPageWithLayout = () => {
   const { profile } = useProfile()
   const { ref, q, queryId } = useParams()
   const projectRef = ref as string
-  const { data: organization } = useSelectedOrganizationQuery()
+  const { logsShowMetadataIpTemplate } = useIsFeatureEnabled(['logs:show_metadata_ip_template'])
+
+  const allTemplates = useMemo(() => {
+    if (logsShowMetadataIpTemplate) return TEMPLATES
+    else return TEMPLATES.filter((x) => x.label !== 'Metadata IP')
+  }, [logsShowMetadataIpTemplate])
 
   const editorRef = useRef<editor.IStandaloneCodeEditor>()
   const [editorId] = useState<string>(uuidv4())
   const { timestampStart, timestampEnd, setTimeRange } = useLogsUrlState()
+
+  const { logsDefaultQuery } = useCustomContent(['logs:default_query'])
+  const PLACEHOLDER_QUERY = IS_PLATFORM
+    ? logsDefaultQuery ?? PLATFORM_PLACEHOLDER_QUERY
+    : LOCAL_PLACEHOLDER_QUERY
 
   const [editorValue, setEditorValue] = useState<string>(PLACEHOLDER_QUERY)
   const [saveModalOpen, setSaveModalOpen] = useState<boolean>(false)
@@ -81,6 +92,9 @@ export const LogsExplorerPage: NextPageWithLayout = () => {
     `project-content-${projectRef}-recent-log-sql`,
     []
   )
+
+  const { getEntitlementNumericValue } = useCheckEntitlements('log.retention_days')
+  const entitledToAuditLogDays = getEntitlementNumericValue()
 
   const { data: content } = useContentQuery({
     projectRef: ref,
@@ -106,7 +120,7 @@ export const LogsExplorerPage: NextPageWithLayout = () => {
   const results = logData
   const isLoading = logsLoading
 
-  const { mutate: upsertContent, isLoading: isUpsertingContent } = useContentUpsertMutation({
+  const { mutate: upsertContent, isPending: isUpsertingContent } = useContentUpsertMutation({
     onError: (e) => {
       const error = e as { message: string }
       console.error(error)
@@ -130,7 +144,6 @@ export const LogsExplorerPage: NextPageWithLayout = () => {
   const addRecentLogSqlSnippet = (snippet: Partial<LogSqlSnippets.Content>) => {
     const defaults: LogSqlSnippets.Content = {
       schema_version: '1',
-      favorite: false,
       sql: '',
       content_id: '',
     }
@@ -242,7 +255,10 @@ export const LogsExplorerPage: NextPageWithLayout = () => {
   }
 
   const handleDateChange = ({ to, from }: DatePickerToFrom) => {
-    const shouldShowUpgradePrompt = maybeShowUpgradePrompt(from, organization?.plan?.id)
+    const shouldShowUpgradePrompt = maybeShowUpgradePromptIfNotEntitled(
+      from,
+      entitledToAuditLogDays
+    )
 
     if (shouldShowUpgradePrompt) {
       setShowUpgradePrompt(!showUpgradePrompt)
@@ -277,12 +293,15 @@ export const LogsExplorerPage: NextPageWithLayout = () => {
   // Show the prompt on page load based on query params
   useEffect(() => {
     if (timestampStart) {
-      const shouldShowUpgradePrompt = maybeShowUpgradePrompt(timestampStart, organization?.plan?.id)
+      const shouldShowUpgradePrompt = maybeShowUpgradePromptIfNotEntitled(
+        timestampStart,
+        entitledToAuditLogDays
+      )
       if (shouldShowUpgradePrompt) {
         setShowUpgradePrompt(!showUpgradePrompt)
       }
     }
-  }, [timestampStart, organization])
+  }, [timestampStart, entitledToAuditLogDays])
 
   return (
     <div className="w-full h-full mx-auto">
@@ -297,7 +316,7 @@ export const LogsExplorerPage: NextPageWithLayout = () => {
             defaultTo={timestampEnd || ''}
             onDateChange={handleDateChange}
             onSelectSource={handleInsertSource}
-            templates={TEMPLATES.filter((template) => template.mode === 'custom')}
+            templates={allTemplates.filter((template) => template.mode === 'custom')}
             onSelectTemplate={onSelectTemplate}
             warnings={warnings}
           />

@@ -48,9 +48,10 @@ export interface TextConfirmModalProps {
   formMessage?: React.ComponentProps<typeof FormMessage_Shadcn_>
   description?: React.ComponentProps<typeof FormDescription_Shadcn_>
   blockDeleteButton?: boolean
+  errorMessage?: string
 }
 
-const TextConfirmModal = forwardRef<
+export const TextConfirmModal = forwardRef<
   React.ElementRef<typeof DialogContent>,
   React.ComponentPropsWithoutRef<typeof Dialog> & TextConfirmModalProps
 >(
@@ -75,6 +76,7 @@ const TextConfirmModal = forwardRef<
       children,
       blockDeleteButton = true,
       variant = 'default',
+      errorMessage = 'Value entered does not match',
       ...props
     },
     ref
@@ -83,7 +85,7 @@ const TextConfirmModal = forwardRef<
       confirmValue: z.preprocess(
         (val) => (typeof val === 'string' ? val.trim() : val),
         z.literal(confirmString.trim(), {
-          required_error: 'Value entered does not match.',
+          errorMap: () => ({ message: errorMessage }),
         })
       ),
     })
@@ -91,10 +93,13 @@ const TextConfirmModal = forwardRef<
     // 1. Define your form.
     const form = useForm<z.infer<typeof formSchema>>({
       resolver: zodResolver(formSchema),
+      reValidateMode: 'onChange',
       defaultValues: {
         confirmValue: '',
       },
     })
+
+    const isFormValid = form.formState.isValid
 
     // 2. Define a submit handler.
     function onSubmit(values: z.infer<typeof formSchema>) {
@@ -149,14 +154,14 @@ const TextConfirmModal = forwardRef<
             <form
               autoComplete="off"
               onSubmit={form.handleSubmit(onSubmit)}
-              className="px-5 flex flex-col gap-2 pt-3"
+              className="px-5 flex flex-col gap-y-3 pt-3"
             >
               <FormField_Shadcn_
                 control={form.control}
                 name="confirmValue"
                 render={({ field }) => (
-                  <FormItem_Shadcn_ className="flex flex-col gap-y-1">
-                    <FormLabel_Shadcn_ {...label}>
+                  <FormItem_Shadcn_ className="flex flex-col gap-y-2">
+                    <FormLabel_Shadcn_ {...label} enableSelection>
                       Type{' '}
                       <span className="text-foreground break-all whitespace-pre">
                         {confirmString}
@@ -171,7 +176,7 @@ const TextConfirmModal = forwardRef<
                         {...field}
                       />
                     </FormControl_Shadcn_>
-                    <FormDescription_Shadcn_ {...description} />
+                    {!!description && <FormDescription_Shadcn_ {...description} />}
                     <FormMessage_Shadcn_ {...formMessage} />
                   </FormItem_Shadcn_>
                 )}
@@ -194,7 +199,7 @@ const TextConfirmModal = forwardRef<
                   }
                   htmlType="submit"
                   loading={loading}
-                  disabled={loading}
+                  disabled={!isFormValid || loading}
                   className="truncate"
                 >
                   {confirmLabel}

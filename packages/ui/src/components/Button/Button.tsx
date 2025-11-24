@@ -6,25 +6,24 @@ import { Loader2 } from 'lucide-react'
 import { cloneElement, forwardRef, isValidElement } from 'react'
 import { SIZE_VARIANTS, SIZE_VARIANTS_DEFAULT } from '../../lib/constants'
 import { cn } from '../../lib/utils/cn'
-import { IconContext } from '../Icon/IconContext'
 
 export type ButtonVariantProps = VariantProps<typeof buttonVariants>
 const buttonVariants = cva(
-  `relative 
+  `relative
   flex items-center justify-center
-  cursor-pointer 
-  inline-flex 
-  items-center 
-  space-x-2 
-  text-center 
-  font-regular 
-  ease-out 
-  duration-200 
+  cursor-pointer
+  inline-flex
+  items-center
+  space-x-2
+  text-center
+  font-regular
+  ease-out
+  duration-200
   rounded-md
-  outline-none 
-  transition-all 
-  outline-0 
-  focus-visible:outline-4 
+  outline-none
+  transition-all
+  outline-0
+  focus-visible:outline-4
   focus-visible:outline-offset-1
   border
   `,
@@ -32,7 +31,7 @@ const buttonVariants = cva(
     variants: {
       type: {
         primary: `
-          bg-brand-400 dark:bg-brand-500 
+          bg-brand-400 dark:bg-brand-500
           hover:bg-brand/80 dark:hover:bg-brand/50
           text-foreground
           border-brand-500/75 dark:border-brand/30
@@ -178,7 +177,7 @@ const IconContainerVariants = cva('', {
       link: 'text-brand-600',
       text: 'text-foreground-lighter',
       danger: 'text-destructive-600',
-      warning: 'text-warning-600',
+      warning: 'text-warning',
     },
   },
 })
@@ -196,7 +195,7 @@ const loadingVariants = cva('', {
       link: 'text-brand-600',
       text: 'text-foreground-muted',
       danger: 'text-destructive-600',
-      warning: 'text-warning-600',
+      warning: 'text-warning',
     },
     loading: {
       default: '',
@@ -255,6 +254,11 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
         disabled={disabled}
         className={cn(buttonVariants({ type, size, disabled, block, rounded }), className)}
+        onClick={(e) => {
+          // [Joshen] Prevents redirecting if Button is used with a link-based child element
+          if (disabled) return e.preventDefault()
+          else props?.onClick?.(e)
+        }}
       >
         {asChild ? (
           isValidElement(children) ? (
